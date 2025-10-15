@@ -3,6 +3,7 @@ venv/
 env/
 ENV/
 
+
 # Environment variables
 .env
 
@@ -27,3 +28,9 @@ build/
 
 # Logs
 *.log
+
+# Certificados
+certs/
+
+# Código de referência em JavaScript
+*.js
