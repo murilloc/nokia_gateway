@@ -4,6 +4,12 @@ Nokia Gateway API
 FastAPI-based REST Gateway for Nokia API with automatic token management
 """
 
+<<<<<<< HEAD
+=======
+import os
+import signal
+import logging
+>>>>>>> feature/alarms_events
 import requests
 import urllib3
 from typing import Dict, Optional, List, Any
@@ -14,6 +20,7 @@ from pydantic import BaseModel
 
 from log_config import get_logger
 from token_manager import token_manager
+from alarm_manager import alarm_manager
 
 # Disable SSL warnings for self-signed certificates
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -43,30 +50,61 @@ async def lifespan(app: FastAPI):
     Lifespan context manager for FastAPI app
     Handles startup and shutdown events
     """
+<<<<<<< HEAD
     # Startup: Initialize token manager
+=======
+    # Startup: Initialize services
+>>>>>>> feature/alarms_events
     logger.info("=" * 80)
     logger.info("NOKIA GATEWAY API - STARTING")
     logger.info("=" * 80)
 
     try:
+        # Initialize token manager
         token_manager.initialize()
+<<<<<<< HEAD
+=======
+
+        # Initialize alarm manager
+        logger.info("Initializing alarm manager...")
+        alarm_manager.initialize()
+
+>>>>>>> feature/alarms_events
         logger.info("=" * 80)
         logger.info("✓ Nokia Gateway API started successfully")
         logger.info("Server ready to accept requests on port 6778")
         logger.info("=" * 80)
     except Exception as e:
         logger.error("=" * 80)
+<<<<<<< HEAD
         logger.error(f"✗ Failed to initialize token manager: {e}")
+=======
+        logger.error(f"✗ Failed to initialize services: {e}")
+>>>>>>> feature/alarms_events
         logger.error("=" * 80)
         raise
 
     yield
 
+<<<<<<< HEAD
     # Shutdown: Stop token refresh
     logger.info("=" * 80)
     logger.info("NOKIA GATEWAY API - SHUTTING DOWN")
     logger.info("=" * 80)
     token_manager.stop_auto_refresh()
+=======
+    # Shutdown: Stop services
+    logger.info("=" * 80)
+    logger.info("NOKIA GATEWAY API - SHUTTING DOWN")
+    logger.info("=" * 80)
+
+    # Stop alarm manager
+    alarm_manager.shutdown()
+
+    # Stop token refresh
+    token_manager.stop_auto_refresh()
+
+>>>>>>> feature/alarms_events
     logger.info("✓ Nokia Gateway API stopped gracefully")
     logger.info("=" * 80)
 
@@ -98,6 +136,70 @@ async def health_check():
         "service": "Nokia Gateway API",
         "token_valid": token_manager.is_token_valid()
     }
+
+
+@app.post("/shutdown", tags=["Control"])
+async def shutdown():
+    """
+    Shutdown the Nokia Gateway API gracefully
+
+    This endpoint will stop all services and terminate the application.
+    Use with caution in production environments.
+
+    Returns:
+        Success message
+    """
+    logger.warning("⚠ Shutdown requested via REST API")
+
+    # Send response before shutting down
+    response = {
+        "status": "success",
+        "message": "Nokia Gateway API is shutting down...",
+        "note": "All services will be stopped gracefully"
+    }
+
+    # Schedule shutdown after response is sent
+    # Using signal to trigger graceful shutdown
+    import asyncio
+    asyncio.create_task(_delayed_shutdown())
+
+    return response
+
+
+async def _delayed_shutdown():
+    """Delayed shutdown to allow response to be sent"""
+    import asyncio
+    await asyncio.sleep(1)  # Wait 1 second for response to be sent
+    logger.warning("Initiating graceful shutdown...")
+    os.kill(os.getpid(), signal.SIGTERM)
+
+
+@app.get("/api/v1/nokia_gateway/alarm_status", tags=["Alarms"])
+async def get_alarm_status():
+    """
+    Get alarm manager status
+
+    Returns:
+        Alarm manager status including subscription and Kafka consumer info
+    """
+    try:
+        logger.info("→ Received alarm_status request")
+
+        status_info = alarm_manager.get_status()
+
+        logger.info("✓ Alarm status retrieved successfully")
+
+        return {
+            "status": "success",
+            "data": status_info
+        }
+
+    except Exception as e:
+        logger.error(f"✗ Error retrieving alarm status: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve alarm status: {str(e)}"
+        )
 
 
 @app.get("/api/v1/nokia_gateway/trail_list", tags=["Trail"])
