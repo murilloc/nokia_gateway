@@ -4,12 +4,6 @@ Nokia Gateway API
 FastAPI-based REST Gateway for Nokia API with automatic token management
 """
 
-<<<<<<< HEAD
-=======
-import os
-import signal
-import logging
->>>>>>> feature/alarms_events
 import requests
 import urllib3
 from typing import Dict, Optional, List, Any
@@ -50,11 +44,7 @@ async def lifespan(app: FastAPI):
     Lifespan context manager for FastAPI app
     Handles startup and shutdown events
     """
-<<<<<<< HEAD
-    # Startup: Initialize token manager
-=======
     # Startup: Initialize services
->>>>>>> feature/alarms_events
     logger.info("=" * 80)
     logger.info("NOKIA GATEWAY API - STARTING")
     logger.info("=" * 80)
@@ -62,37 +52,23 @@ async def lifespan(app: FastAPI):
     try:
         # Initialize token manager
         token_manager.initialize()
-<<<<<<< HEAD
-=======
 
         # Initialize alarm manager
         logger.info("Initializing alarm manager...")
         alarm_manager.initialize()
 
->>>>>>> feature/alarms_events
         logger.info("=" * 80)
         logger.info("✓ Nokia Gateway API started successfully")
         logger.info("Server ready to accept requests on port 6778")
         logger.info("=" * 80)
     except Exception as e:
         logger.error("=" * 80)
-<<<<<<< HEAD
-        logger.error(f"✗ Failed to initialize token manager: {e}")
-=======
         logger.error(f"✗ Failed to initialize services: {e}")
->>>>>>> feature/alarms_events
         logger.error("=" * 80)
         raise
 
     yield
 
-<<<<<<< HEAD
-    # Shutdown: Stop token refresh
-    logger.info("=" * 80)
-    logger.info("NOKIA GATEWAY API - SHUTTING DOWN")
-    logger.info("=" * 80)
-    token_manager.stop_auto_refresh()
-=======
     # Shutdown: Stop services
     logger.info("=" * 80)
     logger.info("NOKIA GATEWAY API - SHUTTING DOWN")
@@ -104,7 +80,6 @@ async def lifespan(app: FastAPI):
     # Stop token refresh
     token_manager.stop_auto_refresh()
 
->>>>>>> feature/alarms_events
     logger.info("✓ Nokia Gateway API stopped gracefully")
     logger.info("=" * 80)
 
