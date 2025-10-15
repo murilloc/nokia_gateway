@@ -5,7 +5,6 @@ Manages Nokia API authentication tokens with automatic background refresh
 """
 
 import requests
-import logging
 import os
 from datetime import datetime, timedelta
 from threading import Thread, Event, Lock
@@ -14,15 +13,13 @@ from typing import Optional, Dict
 from dotenv import load_dotenv
 import base64
 
+from log_config import get_logger
+
 # Disable SSL warnings for self-signed certificates
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Get configured logger
+logger = get_logger(__name__)
 
 
 class TokenManager:
@@ -42,6 +39,7 @@ class TokenManager:
     def __init__(self):
         """Initialize the token manager (only once due to singleton pattern)"""
         if hasattr(self, '_initialized'):
+            logger.debug("TokenManager already initialized, reusing instance")
             return
 
         # Load environment variables
@@ -64,7 +62,10 @@ class TokenManager:
         self._token_lock = Lock()
 
         self._initialized = True
-        logger.info("TokenManager initialized")
+        logger.info("TokenManager singleton instance created")
+        logger.info(f"API Base URL: {self.base_url}")
+        logger.info(f"Username: {self.username}")
+        logger.info(f"Token refresh interval: {self.refresh_interval} seconds ({self.refresh_interval/60:.1f} minutes)")
 
     def get_initial_token(self) -> Dict:
         """
@@ -88,6 +89,7 @@ class TokenManager:
 
         try:
             logger.info(f"Requesting initial token from {url}")
+            logger.debug(f"Using username: {self.username}")
 
             response = requests.post(
                 url,
@@ -97,6 +99,7 @@ class TokenManager:
                 timeout=30
             )
 
+            logger.debug(f"Token request response status: {response.status_code}")
             response.raise_for_status()
             token_data = response.json()
 
@@ -108,12 +111,16 @@ class TokenManager:
                 self.expires_in = token_data.get('expires_in', 3600)
                 self.token_expiry = datetime.now() + timedelta(seconds=self.expires_in)
 
-            logger.info(f"Token obtained successfully. Expires in {self.expires_in} seconds at {self.token_expiry}")
+            logger.info(f"✓ Initial token obtained successfully")
+            logger.info(f"Token type: {self.token_type}")
+            logger.info(f"Expires in: {self.expires_in} seconds ({self.expires_in/60:.1f} minutes)")
+            logger.info(f"Expiry time: {self.token_expiry.strftime('%Y-%m-%d %H:%M:%S')}")
 
             return token_data
 
         except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to obtain initial token: {e}")
+            logger.error(f"✗ Failed to obtain initial token: {e}")
+            logger.error(f"Request URL: {url}")
             raise
 
     def refresh_access_token(self) -> Dict:
@@ -137,12 +144,16 @@ class TokenManager:
 
         try:
             logger.info("Refreshing access token...")
+            logger.debug(f"Using refresh token: {current_refresh_token[:20]}...")
+
             response = requests.post(
                 url,
                 json=payload,
                 verify=False,
                 timeout=30
             )
+
+            logger.debug(f"Token refresh response status: {response.status_code}")
             response.raise_for_status()
 
             token_data = response.json()
@@ -155,12 +166,16 @@ class TokenManager:
                 self.expires_in = token_data.get('expires_in', 3600)
                 self.token_expiry = datetime.now() + timedelta(seconds=self.expires_in)
 
-            logger.info(f"Token refreshed successfully. New expiry: {self.token_expiry}")
+            logger.info(f"✓ Token refreshed successfully")
+            logger.info(f"New expiry time: {self.token_expiry.strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(f"Next refresh in: {self.refresh_interval} seconds ({self.refresh_interval/60:.1f} minutes)")
 
             return token_data
 
         except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to refresh token: {e}")
+            logger.error(f"✗ Failed to refresh token: {e}")
+            logger.error(f"Request URL: {url}")
+            logger.error(f"This may cause authentication failures until next retry")
             raise
 
     def get_authorization_header(self) -> Dict[str, str]:
@@ -181,36 +196,52 @@ class TokenManager:
     def start_auto_refresh(self):
         """Start automatic token refresh in background thread"""
         if self._refresh_thread and self._refresh_thread.is_alive():
-            logger.warning("Auto-refresh is already running")
+            logger.warning("Auto-refresh thread is already running")
             return
 
         self._stop_event.clear()
         self._refresh_thread = Thread(
             target=self._auto_refresh_worker,
-            daemon=True
+            daemon=True,
+            name="TokenRefreshThread"
         )
         self._refresh_thread.start()
-        logger.info(f"Auto-refresh started with interval: {self.refresh_interval} seconds")
+        logger.info(f"✓ Auto-refresh thread started")
+        logger.info(f"Refresh interval: {self.refresh_interval} seconds ({self.refresh_interval/60:.1f} minutes)")
+        logger.info(f"Thread name: {self._refresh_thread.name}")
 
     def _auto_refresh_worker(self):
         """Worker thread for automatic token refresh"""
+        logger.info("Auto-refresh worker thread started")
+
         while not self._stop_event.is_set():
             # Wait for the specified interval or until stop event is set
+            logger.debug(f"Waiting {self.refresh_interval} seconds before next refresh...")
             if self._stop_event.wait(timeout=self.refresh_interval):
+                logger.info("Stop event received, exiting auto-refresh worker")
                 break
 
             try:
+                logger.info("Auto-refresh cycle triggered")
                 self.refresh_access_token()
             except Exception as e:
-                logger.error(f"Auto-refresh failed: {e}")
+                logger.error(f"✗ Auto-refresh failed: {e}")
+                logger.error("Will retry on next cycle")
+
+        logger.info("Auto-refresh worker thread stopped")
 
     def stop_auto_refresh(self):
         """Stop the automatic token refresh"""
         if self._refresh_thread and self._refresh_thread.is_alive():
-            logger.info("Stopping auto-refresh...")
+            logger.info("Stopping auto-refresh thread...")
             self._stop_event.set()
             self._refresh_thread.join(timeout=5)
-            logger.info("Auto-refresh stopped")
+            if self._refresh_thread.is_alive():
+                logger.warning("Auto-refresh thread did not stop gracefully within timeout")
+            else:
+                logger.info("✓ Auto-refresh thread stopped successfully")
+        else:
+            logger.debug("Auto-refresh thread is not running")
 
     def is_token_valid(self) -> bool:
         """
@@ -228,10 +259,21 @@ class TokenManager:
 
     def initialize(self):
         """Initialize the token manager by obtaining token and starting auto-refresh"""
-        logger.info("Initializing token manager...")
-        self.get_initial_token()
-        self.start_auto_refresh()
-        logger.info("Token manager ready")
+        logger.info("=" * 60)
+        logger.info("Initializing Token Manager")
+        logger.info("=" * 60)
+
+        try:
+            self.get_initial_token()
+            self.start_auto_refresh()
+            logger.info("=" * 60)
+            logger.info("✓ Token Manager initialized successfully and ready")
+            logger.info("=" * 60)
+        except Exception as e:
+            logger.error("=" * 60)
+            logger.error(f"✗ Token Manager initialization failed: {e}")
+            logger.error("=" * 60)
+            raise
 
 
 # Global token manager instance

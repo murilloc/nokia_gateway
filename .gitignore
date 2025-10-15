@@ -26,4 +26,7 @@ build/
 *~
 
 # Logs
+logs/
 *.log
+*.log.*
+gateway.log

@@ -4,7 +4,6 @@ Nokia Gateway API
 FastAPI-based REST Gateway for Nokia API with automatic token management
 """
 
-import logging
 import requests
 import urllib3
 from typing import Dict, Optional, List, Any
@@ -13,17 +12,14 @@ from fastapi import FastAPI, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from log_config import get_logger
 from token_manager import token_manager
 
 # Disable SSL warnings for self-signed certificates
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Get configured logger
+logger = get_logger(__name__)
 
 
 # Pydantic models for request/response
@@ -48,20 +44,31 @@ async def lifespan(app: FastAPI):
     Handles startup and shutdown events
     """
     # Startup: Initialize token manager
-    logger.info("Starting Nokia Gateway API...")
+    logger.info("=" * 80)
+    logger.info("NOKIA GATEWAY API - STARTING")
+    logger.info("=" * 80)
+
     try:
         token_manager.initialize()
-        logger.info("Nokia Gateway API started successfully")
+        logger.info("=" * 80)
+        logger.info("✓ Nokia Gateway API started successfully")
+        logger.info("Server ready to accept requests on port 6778")
+        logger.info("=" * 80)
     except Exception as e:
-        logger.error(f"Failed to initialize token manager: {e}")
+        logger.error("=" * 80)
+        logger.error(f"✗ Failed to initialize token manager: {e}")
+        logger.error("=" * 80)
         raise
 
     yield
 
     # Shutdown: Stop token refresh
-    logger.info("Shutting down Nokia Gateway API...")
+    logger.info("=" * 80)
+    logger.info("NOKIA GATEWAY API - SHUTTING DOWN")
+    logger.info("=" * 80)
     token_manager.stop_auto_refresh()
-    logger.info("Nokia Gateway API stopped")
+    logger.info("✓ Nokia Gateway API stopped gracefully")
+    logger.info("=" * 80)
 
 
 # Create FastAPI application
@@ -110,15 +117,16 @@ async def get_trail_list(
         HTTPException: If the request fails
     """
     try:
-        logger.info(f"Received trail_list request for network_id: {network_id}")
+        logger.info(f"→ Received trail_list request for network_id: {network_id}")
 
         # Check if token is valid
         if not token_manager.is_token_valid():
-            logger.warning("Token is not valid, attempting to refresh...")
+            logger.warning("Token validation failed, attempting refresh...")
             try:
                 token_manager.refresh_access_token()
+                logger.info("Token refreshed successfully after validation failure")
             except Exception as e:
-                logger.error(f"Failed to refresh token: {e}")
+                logger.error(f"✗ Failed to refresh token: {e}")
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                     detail="Authentication service unavailable"
@@ -126,11 +134,12 @@ async def get_trail_list(
 
         # Get authorization header
         headers = token_manager.get_authorization_header()
+        logger.debug("Authorization header obtained")
 
         # Make request to Nokia API
         endpoint = f"https://10.73.0.181:8443/oms1350/data/npr/trails/{network_id}"
 
-        logger.info(f"Requesting trail list from: {endpoint}")
+        logger.info(f"Requesting trail data from Nokia API: {endpoint}")
 
         response = requests.get(
             endpoint,
@@ -139,9 +148,11 @@ async def get_trail_list(
             timeout=30
         )
 
+        logger.debug(f"Nokia API response status: {response.status_code}")
+
         # Handle different status codes
         if response.status_code == 401:
-            logger.error("Authentication failed (401)")
+            logger.error("✗ Authentication failed (401 Unauthorized)")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Authentication failed"
@@ -153,7 +164,7 @@ async def get_trail_list(
                 detail=f"Network ID {network_id} not found"
             )
         elif response.status_code >= 500:
-            logger.error(f"Nokia API server error: {response.status_code}")
+            logger.error(f"✗ Nokia API server error: {response.status_code}")
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail="Nokia API server error"
@@ -162,7 +173,9 @@ async def get_trail_list(
         response.raise_for_status()
         trail_data = response.json()
 
-        logger.info(f"Successfully retrieved trail list for network {network_id}")
+        trails_count = len(trail_data) if isinstance(trail_data, list) else 1
+        logger.info(f"✓ Successfully retrieved trail list for network {network_id}")
+        logger.info(f"  Trails count: {trails_count}")
 
         return trail_data
 
@@ -170,19 +183,21 @@ async def get_trail_list(
         # Re-raise HTTPException as-is
         raise
     except requests.exceptions.Timeout:
-        logger.error("Request to Nokia API timed out")
+        logger.error("✗ Request to Nokia API timed out (30s timeout)")
+        logger.error(f"  Endpoint: {endpoint}")
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail="Request to Nokia API timed out"
         )
     except requests.exceptions.RequestException as e:
-        logger.error(f"Request to Nokia API failed: {e}")
+        logger.error(f"✗ Request to Nokia API failed: {e}")
+        logger.error(f"  Endpoint: {endpoint}")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Failed to communicate with Nokia API: {str(e)}"
         )
     except Exception as e:
-        logger.error(f"Unexpected error in trail_list endpoint: {e}")
+        logger.error(f"✗ Unexpected error in trail_list endpoint: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal server error: {str(e)}"
