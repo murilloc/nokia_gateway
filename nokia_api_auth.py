@@ -239,6 +239,74 @@ class NokiaAPIAuth:
 
         return response
 
+    def get_trail_list(self, network_id: str) -> Dict:
+        """
+        Get trail list for a specific network ID
+
+        Args:
+            network_id: Network ID (e.g., '788602')
+
+        Returns:
+            dict: Trail list data
+        """
+        endpoint = f"https://10.73.0.181:8443/oms1350/data/npr/trails/{network_id}"
+
+        try:
+            logger.info(f"Fetching trail list for network ID: {network_id}")
+
+            # Make direct request (different base URL)
+            headers = self.get_authorization_header()
+            response = requests.get(
+                endpoint,
+                headers=headers,
+                verify=False,
+                timeout=30
+            )
+            response.raise_for_status()
+
+            trail_data = response.json()
+            logger.info(f"Successfully retrieved trail list. Count: {len(trail_data) if isinstance(trail_data, list) else 'N/A'}")
+
+            return trail_data
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to get trail list: {e}")
+            raise
+
+    def get_trail_current_route(self, trail_id: str) -> Dict:
+        """
+        Get current route for a specific trail ID
+
+        Args:
+            trail_id: Trail ID (e.g., '864572')
+
+        Returns:
+            dict: Trail current route data
+        """
+        endpoint = f"https://10.73.0.181:8443/oms1350/data/npr/trails/{trail_id}/currentRoute"
+
+        try:
+            logger.info(f"Fetching current route for trail ID: {trail_id}")
+
+            # Make direct request (different base URL)
+            headers = self.get_authorization_header()
+            response = requests.get(
+                endpoint,
+                headers=headers,
+                verify=False,
+                timeout=30
+            )
+            response.raise_for_status()
+
+            route_data = response.json()
+            logger.info(f"Successfully retrieved current route for trail {trail_id}")
+
+            return route_data
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to get current route: {e}")
+            raise
+
 
 def main():
     """Main execution function"""
@@ -268,27 +336,45 @@ def main():
         print(f"Expires In: {auth.expires_in} seconds")
         print(f"Token Expiry: {auth.token_expiry}")
 
-        # Start automatic token refresh every 60 minutes (3600 seconds)
-        auth.start_auto_refresh(refresh_interval=3600)
+        # Start automatic token refresh every 50 minutes (3000 seconds)
+        auth.start_auto_refresh(refresh_interval=3000)
 
         print("\n=== Token auto-refresh is active ===")
-        print("Making example authenticated requests...\n")
+        print("Making API requests...\n")
 
-        # Example: Make authenticated GET request
-        # Uncomment and adjust endpoint as needed
-        # response = auth.make_authenticated_request('GET', '/your/endpoint')
-        # print(f"GET Response Status: {response.status_code}")
-        # print(f"GET Response: {response.json()}")
+        # Example 1: Get Trail List
+        try:
+            print("\n=== Trail List Request ===")
+            network_id = "788602"
+            trail_list = auth.get_trail_list(network_id)
 
-        # Example: Make authenticated POST request
-        # Uncomment and adjust endpoint and data as needed
-        # data = {"key": "value"}
-        # response = auth.make_authenticated_request('POST', '/your/endpoint', json=data)
-        # print(f"POST Response Status: {response.status_code}")
-        # print(f"POST Response: {response.json()}")
+            logger.info(f"Trail List Response for network {network_id}:")
+            logger.info(f"Response type: {type(trail_list)}")
+            logger.info(f"Response data: {json.dumps(trail_list, indent=2)}")
+
+            print(f"\nTrail List for Network {network_id}:")
+            print(json.dumps(trail_list, indent=2))
+        except Exception as e:
+            logger.error(f"Failed to retrieve trail list: {e}")
+
+        # Example 2: Get Trail Current Route (commented out for now)
+        # try:
+        #     print("\n=== Trail Current Route Request ===")
+        #     trail_id = "864572"
+        #     current_route = auth.get_trail_current_route(trail_id)
+        #
+        #     logger.info(f"Current Route Response for trail {trail_id}:")
+        #     logger.info(f"Response type: {type(current_route)}")
+        #     logger.info(f"Response data: {json.dumps(current_route, indent=2)}")
+        #
+        #     print(f"\nCurrent Route for Trail {trail_id}:")
+        #     print(json.dumps(current_route, indent=2))
+        # except Exception as e:
+        #     logger.error(f"Failed to retrieve current route: {e}")
 
         # Keep the program running to maintain token refresh
-        print("Program is running. Token will auto-refresh every 60 minutes.")
+        print("\n=== Program is running ===")
+        print("Token will auto-refresh every 50 minutes.")
         print("Press Ctrl+C to stop...\n")
 
         # Keep main thread alive
