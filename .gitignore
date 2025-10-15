@@ -35,3 +35,6 @@ gateway.log
 
 # certs
 certs/
+
+# systemctl
+start_gateway.sh
