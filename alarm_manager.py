@@ -137,15 +137,39 @@ class AlarmManager:
             try:
                 logger.info("Auto-renewal cycle triggered")
 
-                # Renew token first
+                # Renew token first (token_manager now handles fallback to initial token)
                 logger.info("Renewing access token...")
-                token_manager.refresh_access_token()
+                try:
+                    token_manager.refresh_access_token()
+                except Exception as token_error:
+                    logger.error(f"Token refresh failed: {token_error}")
+                    # Token manager will handle fallback, continue with subscription renewal
 
                 # Then renew subscription
                 logger.info("Renewing subscription...")
-                alarm_subscription.renew_subscription()
+                renewal_success = alarm_subscription.renew_subscription()
 
-                logger.info("✓ Auto-renewal cycle completed successfully")
+                if not renewal_success:
+                    logger.warning("Subscription renewal failed, attempting to recreate...")
+                    # Stop current consumer
+                    from kafka_consumer import kafka_consumer
+                    kafka_consumer.stop_consuming()
+
+                    # Recreate subscription
+                    subscription_info = alarm_subscription.create_subscription(
+                        category="NSP-FAULT",
+                        property_filter="severity = 'warning'"
+                    )
+
+                    topic_id = subscription_info.get('topicId')
+                    if topic_id:
+                        # Restart consumer with new topic
+                        kafka_consumer.start_consuming(topic_id)
+                        logger.info("✓ Subscription recreated and consumer restarted")
+                    else:
+                        logger.error("✗ Failed to get topic ID from recreated subscription")
+                else:
+                    logger.info("✓ Auto-renewal cycle completed successfully")
 
             except Exception as e:
                 logger.error(f"✗ Auto-renewal failed: {e}")

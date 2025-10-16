@@ -83,6 +83,15 @@ class LogConfig:
         error_handler.setFormatter(formatter)
         root_logger.addHandler(error_handler)
 
+        # Reduce verbosity of Kafka-related loggers
+        # These loggers can be very verbose during connection establishment
+        logging.getLogger('kafka').setLevel(logging.WARNING)
+        logging.getLogger('kafka.conn').setLevel(logging.WARNING)
+        logging.getLogger('kafka.coordinator').setLevel(logging.WARNING)
+        logging.getLogger('kafka.coordinator.consumer').setLevel(logging.CRITICAL)  # Suppress offset commit errors
+        logging.getLogger('kafka.coordinator.heartbeat').setLevel(logging.WARNING)
+        logging.getLogger('kafka.cluster').setLevel(logging.CRITICAL)  # Suppress "topic not found" errors
+
         cls._initialized = True
 
         # Log initialization success
@@ -92,6 +101,7 @@ class LogConfig:
         root_logger.info(f"Log level: {log_level}")
         root_logger.info(f"Max log file size: {log_max_bytes / 1024 / 1024:.1f} MB")
         root_logger.info(f"Backup count: {log_backup_count}")
+        root_logger.info("Kafka loggers set to WARNING level to reduce verbosity")
         root_logger.info("=" * 80)
 
     @classmethod

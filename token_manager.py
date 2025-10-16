@@ -224,6 +224,20 @@ class TokenManager:
             try:
                 logger.info("Auto-refresh cycle triggered")
                 self.refresh_access_token()
+            except requests.exceptions.HTTPError as e:
+                # If refresh fails with 400/401, token is invalid - get new initial token
+                if e.response and e.response.status_code in [400, 401]:
+                    logger.warning(f"✗ Refresh token invalid (HTTP {e.response.status_code})")
+                    logger.info("Attempting to obtain new initial token...")
+                    try:
+                        self.get_initial_token()
+                        logger.info("✓ Successfully obtained new initial token")
+                    except Exception as init_error:
+                        logger.error(f"✗ Failed to obtain new initial token: {init_error}")
+                        logger.error("Will retry on next cycle")
+                else:
+                    logger.error(f"✗ Auto-refresh failed: {e}")
+                    logger.error("Will retry on next cycle")
             except Exception as e:
                 logger.error(f"✗ Auto-refresh failed: {e}")
                 logger.error("Will retry on next cycle")

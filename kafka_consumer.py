@@ -81,10 +81,17 @@ class NokiaKafkaConsumer:
                 bootstrap_servers=f"{self.kafka_broker}:{self.kafka_port}",
                 group_id=self.kafka_group_id,
                 auto_offset_reset='earliest',
-                enable_auto_commit=True,
+                enable_auto_commit=False,  # Disable auto-commit to avoid errors on expired topics
                 value_deserializer=lambda m: json.loads(m.decode('utf-8')) if m else None,
                 security_protocol='SSL',
-                ssl_context=ssl_context
+                ssl_context=ssl_context,
+                # Connection settings to reduce initial connection errors
+                session_timeout_ms=30000,
+                heartbeat_interval_ms=10000,
+                request_timeout_ms=40000,  # Must be larger than session_timeout_ms
+                max_poll_interval_ms=300000,
+                # API version settings
+                api_version_auto_timeout_ms=5000
             )
 
             logger.info("✓ Kafka consumer created successfully")
